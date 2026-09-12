@@ -1,0 +1,107 @@
+name: taw-qa
+
+services:
+  mongo:
+    image: mongo:7
+    volumes:
+      - taw-qa-mongo:/data/db
+      - /Users/andie/taw-qa/mongo:/dump:ro
+      - /Users/andie/Documents/GitHub/taw-qa/docker/mongo-init.sh:/docker-entrypoint-initdb.d/00-restore.sh:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 15s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+    working_dir: /app
+    volumes:
+      - /Users/andie/taw-qa/checkouts/sutagrow-api:/app
+      - taw-qa-api-nm:/app/node_modules
+      - taw-qa-api-dist:/app/dist
+    env_file:
+      - path: /Users/andie/agribeacon-ws/sutagrow-api/.env
+        required: false
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/farm_management
+      PORT: "3005"
+      SKIP_MQTT: "true"
+      SITE_URL: http://web:3002
+      NEXT_PUBLIC_API_URL: http://api:3005/api
+      NEXT_PUBLIC_SOCKET_URL: http://api:3005
+      NEXT_PUBLIC_SITE_URL: http://web:3002
+    expose:
+      - "3005"
+    command:
+      [
+        "bash",
+        "-lc",
+        "if [ ! -x node_modules/.bin/tsc ]; then npm ci; fi; npx tsc -p tsconfig.build.json && node scripts/copy-assets.js && exec node dist/server.js",
+      ]
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+    working_dir: /app
+    volumes:
+      - /Users/andie/taw-qa/checkouts/sutagrow-web:/app
+      - taw-qa-web-nm:/app/node_modules
+      - taw-qa-web-next:/app/.next
+    env_file:
+      - path: /Users/andie/agribeacon-ws/sutagrow-web/.env
+        required: false
+    environment:
+      PORT: "3002"
+      NEXT_PUBLIC_API_URL: http://api:3005/api
+      NEXT_PUBLIC_SOCKET_URL: http://api:3005
+      NEXT_PUBLIC_SITE_URL: http://web:3002
+    expose:
+      - "3002"
+    command:
+      [
+        "bash",
+        "-lc",
+        "if [ ! -x node_modules/.bin/next ]; then npm ci; fi; npx next build && exec npx next start --hostname 0.0.0.0 --port 3002",
+      ]
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    working_dir: /Users/andie/Documents/GitHub/taw-qa
+    environment:
+      PR_URL: ${PR_URL:-}
+      GH_TOKEN: ${GH_TOKEN:-}
+      PLANE_API_KEY: ${PLANE_API_KEY:-}
+      CLAUDE_CONFIG_DIR: /data/claude
+      TAW_QA_ROOT: /Users/andie/Documents/GitHub/taw-qa
+      API_URL: http://api:3005
+      WEB_URL: http://web:3002
+      NODE_PATH: /usr/lib/node_modules
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /Users/andie/taw-qa/checkouts:/Users/andie/taw-qa/checkouts
+      - /Users/andie/taw-qa/mongo:/Users/andie/taw-qa/mongo:ro
+      - taw-qa-agent-claude:/data/claude
+      - /Users/andie/Documents/GitHub/taw-qa:/Users/andie/Documents/GitHub/taw-qa
+      - /Users/andie/agribeacon-ws/sutagrow-api/.env:/Users/andie/agribeacon-ws/sutagrow-api/.env:ro
+      - /Users/andie/agribeacon-ws/sutagrow-web/.env:/Users/andie/agribeacon-ws/sutagrow-web/.env:ro
+    command:
+      [
+        "node",
+        "--experimental-strip-types",
+        "/Users/andie/Documents/GitHub/taw-qa/src/agent.ts",
+      ]
+
+volumes:
+  taw-qa-mongo:
+  taw-qa-agent-claude:
+  taw-qa-api-nm:
+  taw-qa-api-dist:
+  taw-qa-web-nm:
+  taw-qa-web-next:
