@@ -21,6 +21,7 @@ import { installationToken, postComment, readPr, redact } from "./gh-app.ts";
 import { writeSpec, type OpencodeConfig } from "./opencode.ts";
 import { assertNotProd, type ProjectConfig } from "./project-config.ts";
 import { newSignals, readUptime, startProxy } from "./proxy.ts";
+import { failureExcerpt, parseResults, stripAnsi } from "./pw-output.ts";
 import { renderReport } from "./report.ts";
 import { readLock } from "./run-lock.ts";
 import { decideVerdict, type RunSignals } from "./verdict.ts";
@@ -244,15 +245,22 @@ export async function main(): Promise<number> {
           timeoutMs: 25 * 60 * 1000,
         },
       );
-      const green = r.code === 0;
-      if (!green) {
-        errorText = redact(`${r.stdout}\n${r.stderr}`.slice(-3000), token);
+      const raw = `${r.stdout}\n${r.stderr}`;
+      const results = parseResults(raw);
+
+      // Lấy kết quả TỪNG test, không gán một `green` chung theo exit code:
+      // Report từng ghi "Đã test: (không có)" trong khi một nửa số test đã xanh.
+      verdictInput =
+        results.length > 0
+          ? results.map((t) => ({ text: t.title, green: t.green }))
+          : claims.testable.map((c) => ({ text: c.text, green: r.code === 0 }));
+
+      if (r.code !== 0) {
+        errorText = redact(failureExcerpt(raw), token);
         // In ra log NGOÀI Report: Report có thể không đăng được (403, mất mạng),
         // mà đây lại là thông tin chẩn đoán quan trọng nhất của cả lần chạy.
-        // Một đường ra duy nhất cho dữ liệu quan trọng nhất là thiết kế sai.
-        console.error(`[runner] playwright exit=${r.code}\n${errorText}`);
+        console.error(`[runner] playwright exit=${r.code}\n${stripAnsi(raw).slice(-4000)}`);
       }
-      verdictInput = claims.testable.map((c) => ({ text: c.text, green }));
     }
 
     signals.uptimeAfter = await readUptime(cfg.beUrl);
