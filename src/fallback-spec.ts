@@ -31,8 +31,10 @@ export function expectedWebNeedles(claim: string): string[] {
     /(?:thấy|hiện|hiển thị|contains|shows)\s+(.+)/i,
   );
   if (afterSee) {
-    const chunk = afterSee[1].replace(/^trên\s+/i, "").trim();
-    if (chunk.length >= 2) needles.add(chunk);
+    for (const part of afterSee[1].split(/\s+(?:hoặc|or|,)\s+/i)) {
+      const chunk = part.replace(/^trên\s+/i, "").trim();
+      if (chunk.length >= 2) needles.add(chunk);
+    }
   }
   for (const m of claim.matchAll(/["“]([^"”]+)["”]/g)) {
     if (m[1].length >= 2) needles.add(m[1]);
@@ -100,15 +102,25 @@ const cases = ${JSON.stringify(cases, null, 2)};
         }
       }
     } else {
+      const videoDir = ${JSON.stringify("/Users/andie/Documents/GitHub/taw-qa/tmp/videos")};
+      const { mkdirSync } = await import("node:fs");
+      mkdirSync(videoDir, { recursive: true });
+      const path = /login/i.test(c.text) ? "/login" : "/";
       const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
-      const page = await browser.newPage();
-      await page.goto(webBase);
+      const context = await browser.newContext({
+        recordVideo: { dir: videoDir, size: { width: 1280, height: 720 } },
+      });
+      const page = await context.newPage();
+      await page.goto(webBase + path, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await page.waitForTimeout(2000);
+      await page.screenshot({ path: videoDir + "/e2e.png", fullPage: true });
       const html = await page.content();
       for (const n of c.needles) {
         if (!html.toLowerCase().includes(String(n).toLowerCase())) {
           failures.push(c.title + " missing " + n);
         }
       }
+      await context.close();
       await browser.close();
     }
   }

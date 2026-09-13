@@ -39,3 +39,35 @@ _Avoid_: empty seed as default, prod dump without saying so, redact PII
 **Spec**:
 Artifact đích của Feature 1: architecture, flow, và quyết định đã chốt. Nguồn: [`docs/spec/feature-1.md`](docs/spec/feature-1.md). Một agent khác implement từ spec. Spec chưa phải CLI chạy được.
 _Avoid_: working CLI, prototype as destination
+
+## Feature 2
+
+Spec: [`docs/spec/feature-2.md`](docs/spec/feature-2.md). Term dưới đây chỉ dùng cho Feature 2. Term Feature 1 ở trên không đổi nghĩa.
+
+**Feature 2**:
+taw-qa online cho `sutagrow-web`: comment `/taw-qa` trên PR, Runner dựng FE từ code PR, cắm qua Proxy tới BE staging thật, test theo Block, Report lên GitHub và Plane.
+_Avoid_: platform, mọi loại dự án, CI cho `sutagrow-api`
+
+**Runner**:
+EC2 `m7i-flex.xlarge` ở `ap-southeast-1`, tắt khi rảnh, Lambda start theo từng `/taw-qa`, chạy xong tự `shutdown`. Một run tại một thời điểm. Thay chỗ của Operator ở Feature 1.
+_Avoid_: operator, Mac, CI runner của GitHub Actions, instance bật 24/7, chạy song song nhiều run
+
+**Block**:
+Đoạn giữa `<taw-qa start>` và `<taw-qa end>` **trong PR body**. Nguồn Claim duy nhất khi chạy online — một PR là một môi trường, Claim nằm cùng chỗ với code. Người hoặc agent implement viết Block ở bước trước, taw-qa chỉ verify.
+_Avoid_: Block trên Plane, PR body tự do, heuristic đoán Claim, agent tự sáng tạo kịch bản
+
+**Proxy**:
+Tiến trình nghe `127.0.0.1:3018`, forward tới `BE_URL` và tự chèn header CORS cho origin `http://127.0.0.1:3000`. Trả `/health`, `/__test__/reset` và `/socket.io/*` tại chỗ. Từ chối start nếu `BE_URL` là host prod.
+_Avoid_: sửa `CORS_ORIGIN` của BE, dựng hostname `*.agribeacon.tech`, mock API, proxy WebSocket
+
+**BE_URL**:
+URL BE staging, khai trong Project config lúc setup. Không suy từ `.env` của bất kỳ máy nào — `.env` trên Mac operator đang trỏ prod trong khi `.env.example` ghi staging.
+_Avoid_: đọc từ `.env`, hard-code, đoán theo tên domain
+
+**BLOCKED**:
+Verdict thứ ba, tách khỏi FAIL. Nghĩa là không kết luận được về PR: BE không xanh, BE restart giữa chừng (`uptime` tụt), `429`/`5xx`, guard prod, timeout. Không có screenshot, không có script chốt.
+_Avoid_: coi là FAIL, coi là PASS, im lặng retry
+
+**Project config**:
+Khai báo per-project lúc connect: `BE_URL`, tài khoản test, Plane project, key, nội dung `.env` FE ghi vào checkout. Feature 2 chỉ có một project: `sutagrow-web`.
+_Avoid_: auto-detect, đọc từ repo, schema cho mọi dự án

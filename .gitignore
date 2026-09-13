@@ -1,2 +1,11 @@
 node_modules/
 tmp/
+
+# OpenTofu/Terraform: state chứa ARN, instance id, và có thể cả giá trị secret.
+# Repo này public — state không bao giờ được lên đây.
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/*.tfstate
+infra/*.tfstate.*
+infra/tfplan
+infra/dist/

@@ -6,6 +6,7 @@ import { assembleClaims, canPass, type AssembledClaims } from "./claims.ts";
 import { checkoutPlan } from "./checkout.ts";
 import { runCheckout } from "./checkout-run.ts";
 import { envAction, formatEnvDiff } from "./env-diff.ts";
+import { runClaudeSpec } from "./claude-spec.ts";
 import { buildFallbackSpec } from "./fallback-spec.ts";
 import { prFieldsFromGhView } from "./github-pr.ts";
 import {
@@ -346,9 +347,22 @@ export async function runAgent(env: NodeJS.ProcessEnv): Promise<number> {
 
   mkdirSync(`${HOST_REPO}/tmp`, { recursive: true });
   const specPath = `${HOST_REPO}/tmp/taw-qa.spec.mjs`;
-  const script = buildFallbackSpec(claims.testable);
+  const claudeScript = runClaudeSpec(claims.testable, {
+    cwd: HOST_REPO,
+    specPath,
+  });
+  const script = claudeScript ?? buildFallbackSpec(claims.testable);
+  process.stderr.write(
+    claudeScript
+      ? "taw-qa: spec from Claude Code\n"
+      : "taw-qa: spec fallback (Claude không ra file hợp lệ)\n",
+  );
   ctx.script = script;
   writeFileSync(specPath, script);
+  writeFileSync(
+    `${HOST_REPO}/tmp/spec-source.txt`,
+    claudeScript ? "claude\n" : "fallback\n",
+  );
 
   let result: "PASS" | "FAIL" = "FAIL";
   let error = "";

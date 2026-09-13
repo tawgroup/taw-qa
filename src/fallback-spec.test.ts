@@ -72,6 +72,8 @@ test("default fallback spec imports the agent global file, not the bare playwrig
   assert.doesNotMatch(spec, /from "playwright"/);
   assert.match(spec, /http:\/\/api:3005/);
   assert.match(spec, /http:\/\/web:3002/);
+  assert.match(spec, /recordVideo/);
+  assert.match(spec, /\/login/);
   assert.match(spec, /expectStatus": 201/);
   assert.match(spec, /c\.expectStatus/);
   assert.match(spec, /needles/);

@@ -7,7 +7,8 @@
   },
   "scripts": {
     "test": "node --experimental-strip-types --test src/*.test.ts",
-    "taw-qa": "node --experimental-strip-types src/cli.ts"
+    "taw-qa": "node --experimental-strip-types src/cli.ts",
+    "build:lambda": "esbuild src/lambda-handler.ts --bundle --platform=node --target=node22 --format=cjs --external:@aws-sdk/* --outfile=infra/dist/handler.js"
   },
   "dependencies": {
     "playwright": "^1.55.0"
