@@ -50,6 +50,7 @@ resource "aws_iam_role_policy" "runner" {
         Resource = [
           data.aws_secretsmanager_secret.github_app.arn,
           data.aws_secretsmanager_secret.project.arn,
+          data.aws_secretsmanager_secret.opencode.arn,
         ]
       },
       {
@@ -79,7 +80,7 @@ resource "aws_iam_instance_profile" "runner" {
 }
 
 resource "aws_instance" "runner" {
-  ami                    = data.aws_ami.ubuntu.id
+  ami                    = var.ami_id
   instance_type          = var.instance_type
   subnet_id              = data.aws_subnets.default.ids[0]
   vpc_security_group_ids = [aws_security_group.runner.id]

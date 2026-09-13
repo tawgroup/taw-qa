@@ -12,7 +12,7 @@ import { claimsFromPrBody } from "./block.ts";
 import { assembleClaims } from "./claims.ts";
 import { checkoutPr, installDeps, writeFeEnv } from "./fe-checkout.ts";
 import { installationToken, postComment, readPr, redact } from "./gh-app.ts";
-import { buildSpec } from "./online-spec.ts";
+import { writeSpec, type OpencodeConfig } from "./opencode.ts";
 import { assertNotProd, type ProjectConfig } from "./project-config.ts";
 import { newSignals, readUptime, startProxy } from "./proxy.ts";
 import { renderReport } from "./report.ts";
@@ -62,8 +62,8 @@ export const IMPLEMENTED: Record<Step, boolean> = {
   checkout: true, // src/fe-checkout.ts
   "write-env": true, // src/fe-checkout.ts
   "start-proxy": true, // src/proxy.ts
-  // Bộ sinh tất định (src/online-spec.ts). Bản do agent viết cần Claude API
-  // key trên Runner — chưa có, nên chưa bật.
+  // opencode Zen (kimi-k3) viết spec; rơi về bộ sinh tất định nếu model trả
+  // rác hoặc API chết. Chưa có bước MCP snapshot DOM trước khi viết.
   "snapshot-and-spec": true,
   "run-playwright": true,
   // Mới có hợp đồng prefix; phần gọi API xoá thực thể cần biết endpoint của BE.
@@ -205,7 +205,13 @@ export async function main(): Promise<number> {
     });
     console.log("[runner] proxy nghe 127.0.0.1:3018");
 
-    const plan = buildSpec(claims.testable, lock.prNumber);
+    const oc = await secretJson<OpencodeConfig>("taw-qa/opencode");
+    const plan = await writeSpec({
+      cfg: oc,
+      claims: claims.testable,
+      prNumber: lock.prNumber,
+      });
+    console.log(`[runner] spec do ${plan.source}${plan.note ? ` — ${plan.note}` : ""}`);
     notTested.push(...plan.unsupported.map((t) => `${t} (không sinh được assertion)`));
     specText = plan.text;
     mkdirSync(dirname(`${dir}/${plan.path}`), { recursive: true });
