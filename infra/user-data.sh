@@ -9,7 +9,7 @@ echo "[provision] $(date -Is)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-apt-get install -y nodejs git jq
+apt-get install -y nodejs git jq awscli
 
 # journald mac dinh luu trong RAM; instance tat la mat log cua run vua hong.
 mkdir -p /var/log/journal
@@ -41,6 +41,10 @@ ExecStart=/usr/bin/node --experimental-strip-types /opt/taw-qa/src/runner.ts
 StandardOutput=journal
 StandardError=journal
 RemainAfterExit=no
+# Nha khoa o tang systemd, KHONG chi trong finally cua Node. Khi instance bi
+# stop-instances (vi du run treo phai giet tay), tien trinh bi SIGKILL va finally
+# khong bao gio chay -> khoa ket, moi /taw-qa sau do bao "busy". Da xay ra that.
+ExecStopPost=/usr/bin/aws ssm delete-parameter --region ap-southeast-1 --name /taw-qa/current-run
 # Luoi an toan cuoi: runner vo den muc khong chay duoc finally thi systemd tat may.
 ExecStopPost=/usr/bin/bash -c 'systemctl is-failed taw-qa.service >/dev/null && shutdown -h +1 || true' 
 

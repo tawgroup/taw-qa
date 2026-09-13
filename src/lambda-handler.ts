@@ -39,7 +39,7 @@ async function secret(): Promise<Secret> {
   return cached;
 }
 
-const STALE_LOCK_MS = 60 * 60 * 1000;
+const STALE_LOCK_MS = 50 * 60 * 1000;
 
 async function lockIsStale(): Promise<boolean> {
   try {
@@ -122,7 +122,7 @@ export async function handler(event: {
 
     // Runner chết trước khi kịp xoá khoá thì khoá kẹt vĩnh viễn và mọi
     // `/taw-qa` sau đó đều báo "busy". Timeout một lần chạy là 45 phút, nên
-    // khoá quá 60 phút chắc chắn là rác — cướp lại.
+    // khoá quá 50 phút chắc chắn là rác — cướp lại.
     if (!(await lockIsStale())) {
       console.log("busy: run already claimed");
       return reply(200, "busy");
