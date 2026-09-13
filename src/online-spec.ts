@@ -45,11 +45,10 @@ function caseFor(claim: TestableClaim, i: number): string | null {
     .map((e) => `page.getByText(${JSON.stringify(e)}, { exact: false }).first()`)
     .join(",\n      ");
   return `test(${JSON.stringify(`claim ${i + 1}: ${claim.text}`)}, async ({ page }) => {
-  await page.goto(${JSON.stringify(path)});
-  // Claim sai thi assertion nay do: khong chap nhan "trang hien ra" la du.
-  await expect(
-    page.locator('body'),
-  ).toBeVisible();
+  const res = await page.goto(${JSON.stringify(path)});
+  expect(res?.status(), 'HTTP status cua ${path}').toBeLessThan(400);
+
+  // Bang chung cua Claim la chu tren man hinh, khong phai "trang hien ra".
   const candidates = [
       ${anyOf}
   ];
