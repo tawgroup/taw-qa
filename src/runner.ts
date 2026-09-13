@@ -5,7 +5,7 @@
  * thì dừng ở BLOCKED với lý do rõ, KHÔNG giả vờ chạy tiếp. Một Runner boot lên
  * rồi im lặng không làm gì là thứ khó debug nhất của hệ này.
  */
-import { execFileSync } from "node:child_process";
+import { execAsync } from "./exec-async.ts";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { claimsFromPrBody } from "./block.ts";
@@ -219,20 +219,23 @@ export async function main(): Promise<number> {
 
     if (plan.text.includes("test(")) {
       console.log(`[runner] chạy ${plan.path}`);
-      try {
-        // CI không set: reuseExistingServer=true nên Playwright dùng proxy có
-        // sẵn ở :3018 thay vì cố start mock của repo.
-        execFileSync(
-          "npx",
-          ["playwright", "test", plan.path, "--workers=1", "--reporter=list"],
-          { cwd: dir, encoding: "utf8", stdio: "pipe", env: { ...process.env, CI: "" } },
-        );
-        verdictInput = claims.testable.map((c) => ({ text: c.text, green: true }));
-      } catch (e) {
-        const out = String((e as { stdout?: string }).stdout ?? (e as Error).message);
-        errorText = redact(out.slice(-3000), token);
-        verdictInput = claims.testable.map((c) => ({ text: c.text, green: false }));
-      }
+      // execAsync, KHÔNG execFileSync: Proxy chạy trong cùng tiến trình này và
+      // execFileSync sẽ chặn event loop, làm Proxy câm trong khi Playwright chờ
+      // `:3018/health`. Hai bên chờ nhau tới hết timeout.
+      // CI không set: reuseExistingServer=true nên Playwright dùng Proxy có sẵn.
+      const r = await execAsync(
+        "npx",
+        ["playwright", "test", plan.path, "--workers=1", "--reporter=list"],
+        {
+          cwd: dir,
+          env: { ...process.env, CI: "" },
+          timeoutMs: 25 * 60 * 1000,
+        },
+      );
+      const green = r.code === 0;
+      if (!green)
+        errorText = redact(`${r.stdout}\n${r.stderr}`.slice(-3000), token);
+      verdictInput = claims.testable.map((c) => ({ text: c.text, green }));
     }
 
     signals.uptimeAfter = await readUptime(cfg.beUrl);
