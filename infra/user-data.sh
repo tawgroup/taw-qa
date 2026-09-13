@@ -23,35 +23,6 @@ mkdir -p /work
 cd /opt/taw-qa && npm ci --omit=dev
 npx --yes playwright@1.55.0 install --with-deps chromium
 
-cat > /etc/systemd/system/taw-qa.service <<'UNIT'
-[Unit]
-Description=taw-qa Runner: mot lan chay roi tu tat
-After=network-online.target
-Wants=network-online.target
+bash /opt/taw-qa/infra/install-unit.sh
 
-[Service]
-Type=oneshot
-WorkingDirectory=/opt/taw-qa
-Environment=AWS_REGION=ap-southeast-1
-Environment=LOCK_PARAM=/taw-qa/current-run
-# git pull lay code moi nhat moi lan boot; khong fail boot neu mang chap.
-ExecStartPre=-/usr/bin/git -C /opt/taw-qa pull --ff-only
-ExecStartPre=-/usr/bin/npm ci --omit=dev --prefix /opt/taw-qa
-ExecStart=/usr/bin/node --experimental-strip-types /opt/taw-qa/src/runner.ts
-StandardOutput=journal
-StandardError=journal
-RemainAfterExit=no
-# Nha khoa o tang systemd, KHONG chi trong finally cua Node. Khi instance bi
-# stop-instances (vi du run treo phai giet tay), tien trinh bi SIGKILL va finally
-# khong bao gio chay -> khoa ket, moi /taw-qa sau do bao "busy". Da xay ra that.
-ExecStopPost=/usr/bin/aws ssm delete-parameter --region ap-southeast-1 --name /taw-qa/current-run
-# Luoi an toan cuoi: runner vo den muc khong chay duoc finally thi systemd tat may.
-ExecStopPost=/usr/bin/bash -c 'systemctl is-failed taw-qa.service >/dev/null && shutdown -h +1 || true' 
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-systemctl daemon-reload
-systemctl enable taw-qa.service
 echo "[provision] xong. Xem log moi lan chay: journalctl -u taw-qa"
