@@ -26,9 +26,8 @@ ExecStart=/usr/bin/node --experimental-strip-types /opt/taw-qa/src/runner.ts
 # Don dep KHONG duoc phu thuoc node_modules cua repo -- dung thu co the hong.
 # aws CLI cua he thong chay duoc ca khi npm ci vo, ca khi runner bi SIGKILL.
 ExecStopPost=-/usr/bin/aws ssm delete-parameter --region ap-southeast-1 --name /taw-qa/current-run
-# Day log len CloudWatch TRUOC khi tat, neu khong thi moi lan debug phai start
-# lai may va giành giat mot cua so vai chuc giay.
-ExecStopPost=-/usr/bin/bash /opt/taw-qa/infra/ship-logs.sh
+# self-stop.sh tu day log len CloudWatch roi moi tat. Gop vao mot ExecStopPost
+# de sua duoc bang git pull, khong phai ghi lai unit.
 ExecStopPost=/usr/bin/bash /opt/taw-qa/infra/self-stop.sh
 
 StandardOutput=journal
