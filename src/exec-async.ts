@@ -12,6 +12,41 @@ export type ExecResult = { code: number; stdout: string; stderr: string };
  *
  * Đã xảy ra thật: run treo 8 phút, port LISTEN nhưng curl trả 000.
  */
+export type Bg = { kill: () => void; output: () => string };
+
+/**
+ * Chạy nền, KHÔNG chờ. Dùng để giữ FE sống ở :3000 trong lúc snapshot DOM rồi
+ * chạy test — `playwright.config.ts` của repo để `reuseExistingServer: true`
+ * nên nó sẽ dùng lại server này thay vì start lại.
+ */
+export function spawnBackground(
+  cmd: string,
+  args: string[],
+  opts: { cwd: string; env?: NodeJS.ProcessEnv },
+): Bg {
+  const p = spawn(cmd, args, {
+    cwd: opts.cwd,
+    env: opts.env ?? process.env,
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+  });
+  let buf = "";
+  p.stdout.on("data", (d) => (buf += d));
+  p.stderr.on("data", (d) => (buf += d));
+  return {
+    // Giết cả nhóm tiến trình: `npm run start` đẻ ra `next start` con, giết mỗi
+    // npm thì next vẫn giữ cổng 3000 và lần chạy sau đụng EADDRINUSE.
+    kill: () => {
+      try {
+        process.kill(-p.pid!, "SIGKILL");
+      } catch {
+        p.kill("SIGKILL");
+      }
+    },
+    output: () => buf,
+  };
+}
+
 export function execAsync(
   cmd: string,
   args: string[],

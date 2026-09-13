@@ -14,7 +14,7 @@ export type OpencodeConfig = {
  * ~/.local/share/opencode/auth.json qua lệnh `/connect` trong TUI, không có
  * đường khai báo headless nào được document.
  */
-export function buildPrompt(claims: TestableClaim[]): string {
+export function buildPrompt(claims: TestableClaim[], dom = ""): string {
   return [
     "You write Playwright specs. Output ONLY TypeScript code. No prose, no markdown fences.",
     "",
@@ -28,6 +28,7 @@ export function buildPrompt(claims: TestableClaim[]): string {
     "- No page.waitForTimeout. No screenshot calls.",
     "- The UI is Vietnamese: 'Đăng nhập' = Login, 'Đăng ký' = Register",
     "- Anything the test creates must be named with the prefix given below",
+    dom,
   ].join("\n");
 }
 
@@ -67,10 +68,12 @@ export async function writeSpec(opts: {
   cfg: OpencodeConfig;
   claims: TestableClaim[];
   prNumber: number;
+  /** DOM thật, render từ dom-snapshot. Không có thì model phải đoán locator. */
+  dom?: string;
   fetchImpl?: typeof fetch;
 }): Promise<SpecPlan & { source: "opencode" | "fallback"; note?: string }> {
   const f = opts.fetchImpl ?? fetch;
-  const prompt = `${buildPrompt(opts.claims)}\n- prefix: tawqa-pr${opts.prNumber}-`;
+  const prompt = `${buildPrompt(opts.claims, opts.dom ?? "")}\n- prefix: tawqa-pr${opts.prNumber}-`;
 
   try {
     const r = await f(`${opts.cfg.base_url}/chat/completions`, {

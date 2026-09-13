@@ -5,7 +5,10 @@
  * thì dừng ở BLOCKED với lý do rõ, KHÔNG giả vờ chạy tiếp. Một Runner boot lên
  * rồi im lặng không làm gì là thứ khó debug nhất của hệ này.
  */
+import { spawnBackground, type Bg } from "./exec-async.ts";
 import { execAsync } from "./exec-async.ts";
+import { renderForPrompt, snapshotPages } from "./dom-snapshot.ts";
+import { parseClaim } from "./online-spec.ts";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { claimsFromPrBody } from "./block.ts";
@@ -124,6 +127,21 @@ export async function releaseAndShutdown(): Promise<void> {
   }
 }
 
+/** Chờ FE mở cổng 3000. next build xong rồi start thì vài giây là sẵn sàng. */
+async function waitForFe(timeoutMs = 120_000): Promise<void> {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    try {
+      const r = await fetch("http://127.0.0.1:3000/", { redirect: "manual" });
+      if (r.status < 500) return;
+    } catch {
+      // chưa mở cổng
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  throw new Error("FE không mở cổng 3000 sau 2 phút");
+}
+
 async function imdsToken(): Promise<string> {
   // IMDSv2 bắt buộc (metadata_options.http_tokens = "required").
   const r = await fetch("http://169.254.169.254/latest/api/token", {
@@ -187,6 +205,7 @@ export async function main(): Promise<number> {
   let verdictInput: { text: string; green: boolean }[] = [];
   let errorText: string | undefined;
   let proxy: Awaited<ReturnType<typeof startProxy>> | null = null;
+  let fe: Bg | null = null;
   let specText = "";
   const notTested = claims.skipped.map((s) => s.text);
 
@@ -214,11 +233,67 @@ export async function main(): Promise<number> {
     });
     console.log("[runner] proxy nghe 127.0.0.1:3018");
 
+    // Start FE TRƯỚC khi viết spec, để model nhìn được DOM thật.
+    //
+    // Bỏ bước này thì model đoán locator mù: cùng Claim, cùng trang, hai lần
+    // chạy ra hai locator khác nhau — một lần getByText('Đăng nhập') xanh, lần
+    // sau thêm exact:true thành đỏ vì trang thật ghi "Đăng nhập →". Một PR có
+    // thể xanh rồi đỏ mà không đổi dòng code nào.
+    //
+    // playwright.config.ts của repo để reuseExistingServer:true nên bước chạy
+    // test sau đó dùng lại đúng server này, không start lại.
+    // Chép đúng biến mà `buildPrefix` trong playwright.config.ts của repo set.
+    // Thiếu NEXT_PUBLIC_API_URL thì bundle lấy giá trị trong .env và FE gọi
+    // thẳng BE thay vì đi qua Proxy — CORS chặn, và Proxy thành vô dụng.
+    const pwEnv = {
+      ...process.env,
+      CI: "",
+      PLAYWRIGHT_BROWSERS_PATH: BROWSERS_PATH,
+      NEXT_TELEMETRY_DISABLED: "1",
+      NEXT_PUBLIC_API_URL: "http://127.0.0.1:3018/api",
+      NODE_OPTIONS: "--max-old-space-size=4096",
+    };
+
+    console.log("[runner] next build (~4 phút)");
+    const built = await execAsync("npm", ["run", "build"], {
+      cwd: dir,
+      env: pwEnv,
+      timeoutMs: 12 * 60 * 1000,
+    });
+    if (built.code !== 0)
+      throw new Error(`next build lỗi:\n${built.stdout.slice(-1500)}`);
+
+    fe = spawnBackground(
+      "npm",
+      ["run", "start", "--", "--hostname", "127.0.0.1", "--port", "3000"],
+      { cwd: dir, env: pwEnv },
+    );
+    await waitForFe();
+    console.log("[runner] FE sống ở 127.0.0.1:3000");
+
+    const paths = [
+      ...new Set(
+        claims.testable
+          .map((c) => parseClaim(c.text)?.path)
+          .filter((p): p is string => !!p),
+      ),
+    ];
+    const snaps = await snapshotPages({
+      dir,
+      base: "http://127.0.0.1:3000",
+      paths,
+      env: pwEnv,
+    });
+    console.log(
+      `[runner] snapshot ${snaps.length} trang: ${snaps.map((x) => `${x.path}${x.ok ? "" : "(lỗi)"}`).join(", ")}`,
+    );
+
     const oc = await secretJson<OpencodeConfig>("taw-qa/opencode");
     const plan = await writeSpec({
       cfg: oc,
       claims: claims.testable,
       prNumber: lock.prNumber,
+      dom: renderForPrompt(snaps),
       });
     console.log(`[runner] spec do ${plan.source}${plan.note ? ` — ${plan.note}` : ""}`);
     notTested.push(...plan.unsupported.map((t) => `${t} (không sinh được assertion)`));
@@ -235,15 +310,7 @@ export async function main(): Promise<number> {
       const r = await execAsync(
         "npx",
         ["playwright", "test", plan.path, "--workers=1", "--reporter=list"],
-        {
-          cwd: dir,
-          env: {
-            ...process.env,
-            CI: "",
-            PLAYWRIGHT_BROWSERS_PATH: BROWSERS_PATH,
-          },
-          timeoutMs: 25 * 60 * 1000,
-        },
+        { cwd: dir, env: pwEnv, timeoutMs: 25 * 60 * 1000 },
       );
       const raw = `${r.stdout}\n${r.stderr}`;
       const results = parseResults(raw);
@@ -268,6 +335,8 @@ export async function main(): Promise<number> {
     errorText = redact((e as Error).message, token);
     console.error("[runner] lỗi:", errorText);
   } finally {
+    // Giết FE trước proxy: next start giữ kết nối tới :3018.
+    fe?.kill();
     await proxy?.close();
   }
 
