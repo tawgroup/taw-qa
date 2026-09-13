@@ -76,3 +76,66 @@ test("claimLinesFromBlock nhận cả -, * và 1.", () => {
     ["a", "b", "c"],
   );
 });
+
+test("fenced block ```taw-qa là cú pháp khuyên dùng", () => {
+  const body = [
+    "Sửa nút Tạo farm.",
+    "",
+    "```taw-qa",
+    "- POST /farms trả về 201",
+    "- e2e: login → tạo farm → thấy trên list",
+    "```",
+    "",
+    "cc @dominic",
+  ].join("\n");
+  const got = claimsFromPrBody(body);
+  assert.deepEqual(got.ok && got.claims, [
+    "POST /farms trả về 201",
+    "e2e: login → tạo farm → thấy trên list",
+  ]);
+});
+
+test("HTML comment cũng được, dùng khi muốn Claim hiện như văn xuôi", () => {
+  const body = [
+    "<!-- taw-qa:start -->",
+    "- POST /farms trả về 201",
+    "<!-- taw-qa:end -->",
+  ].join("\n");
+  assert.deepEqual(claimsFromPrBody(body).claims, ["POST /farms trả về 201"]);
+});
+
+test("cú pháp cũ <taw-qa start> vẫn chạy — PR đã viết không gãy", () => {
+  const body = "<taw-qa start>\n- POST /farms trả về 201\n<taw-qa end>";
+  assert.deepEqual(claimsFromPrBody(body).claims, ["POST /farms trả về 201"]);
+});
+
+test("trộn nhiều cú pháp trong một PR thì gộp hết", () => {
+  const body = [
+    "```taw-qa",
+    "- a",
+    "```",
+    "<!-- taw-qa:start -->",
+    "- b",
+    "<!-- taw-qa:end -->",
+  ].join("\n");
+  assert.deepEqual(claimsFromPrBody(body).claims, ["a", "b"]);
+});
+
+test("fence mở mà không đóng thì báo unclosed, không nuốt hết PR body", () => {
+  const body = "```taw-qa\n- a\n\nĐoạn văn phía sau";
+  assert.deepEqual(extractBlocks(body), { ok: false, reason: "unclosed" });
+});
+
+test("fence ngôn ngữ khác không bị nhận nhầm", () => {
+  const body = "```ts\nconst a = 1;\n```";
+  assert.deepEqual(extractBlocks(body), { ok: false, reason: "no-block" });
+});
+
+test("comment nhắc dùng fenced block, không dùng thẻ HTML", () => {
+  const c = claimsFromPrBody("không có gì");
+  assert.equal(c.ok, false);
+  const txt = c.ok === false ? c.comment : "";
+  assert.match(txt, /```taw-qa/);
+  // Thẻ <taw-qa> bị GitHub sanitize nên không được khuyên dùng nữa.
+  assert.doesNotMatch(txt, /<taw-qa start>/);
+});

@@ -127,7 +127,22 @@ Xong khi: Runner đã được start với `PR_URL`, hoặc đã bỏ qua có l�
 
 **Block chỉ đọc từ PR body.** Không đọc Block trên Plane. Một PR là một môi trường, nguồn sự thật nằm cùng chỗ với code.
 
-Cú pháp: `<taw-qa start>` và `<taw-qa end>`, mỗi cái một dòng riêng. Giữa hai dòng đó, mỗi dòng bullet (`-`, `*`, `1.`) là một Claim ứng viên.
+Cú pháp khuyên dùng — **fenced block**:
+
+````
+```taw-qa
+- e2e: mở /login thấy Email
+- POST /farms trả về 201
+```
+````
+
+Mỗi dòng bullet (`-`, `*`, `1.`) trong khối là một Claim ứng viên.
+
+**Không dùng thẻ `<taw-qa>`.** GitHub sanitize tag HTML lạ nên marker **biến mất** khỏi mô tả PR: tác giả không thấy block của mình, người review không biết bot sẽ test gì. Tệ hơn, trong ngữ cảnh HTML block thì markdown bị tắt nên các bullet dồn thành một dòng. Đã xảy ra thật trên PR #916 — parser vẫn đọc được body thô nên không ai phát hiện cho tới khi nhìn màn hình.
+
+Cú pháp thay thế khi muốn Claim hiện như văn xuôi thay vì khối code: `<!-- taw-qa:start -->` … `<!-- taw-qa:end -->`. Marker ẩn (đúng thiết kế của HTML comment), nội dung render bình thường.
+
+Cú pháp cũ `<taw-qa start>` / `<taw-qa end>` vẫn được chấp nhận để PR đã viết không gãy, nhưng không khuyên dùng.
 
 Nhiều cặp `start`/`end` trong một PR body: gộp union, dedup theo nội dung dòng sau khi trim. `start` không có `end` đóng lại: coi như thiếu Block.
 
