@@ -93,8 +93,9 @@ Quyền GitHub App, đúng bốn cái, cài **chỉ** trên `sutagrow-web` (`Onl
 | --- | --- | --- |
 | Metadata | Read | Bắt buộc |
 | Contents | Read | Clone code PR |
-| Pull requests | Read | Đọc title, body (Block), head SHA |
-| Issues | Write | Nhận `issue_comment` và đăng Report |
+| Pull requests | Read | (thay bằng Write, xem dòng dưới) |
+| Issues | Write | Nhận `issue_comment` |
+| Pull requests | **Write** | **Đăng Report.** `Issues: Write` KHÔNG đủ: thử nghiệm cho thấy token đăng được comment lên issue thường (201) nhưng lên PR thì 403 `Resource not accessible by integration`. Docs không ghi chỗ này |
 
 Không xin Contents write, không xin Administration, không xin Actions. App không push, không merge, không đổi setting, không thấy repo khác.
 
@@ -178,7 +179,7 @@ Còn lại forward tới `BE_URL`:
   - `Access-Control-Expose-Headers: ETag, Retry-After` — FE đọc hai header này (`lib/api/multipart-upload.ts:104`, `lib/api/retry.ts:110`) và cả hai không nằm trong danh sách safelist của CORS
   - `Vary: Origin`
 
-Proxy gọi `GET {BE_URL}/health` **trước và sau** lần chạy, lưu `data.uptime`. Dùng cho BLOCKED ở bước 8.
+Proxy gọi `GET {BE_URL}/api/health` **trước và sau** lần chạy, lưu `data.uptime`. Dùng cho BLOCKED ở bước 8.
 
 Proxy đếm mọi response `429`, `502`, `503` và mọi lỗi connection tới upstream trong suốt lần chạy.
 
@@ -235,7 +236,7 @@ Lý do được phép, theo **đúng thứ tự ưu tiên** này khi nhiều cá
 | # | Lý do | Observable |
 | --- | --- | --- |
 | 1 | Proxy từ chối host prod | guard bước 5. Đứng đầu vì nó nghĩa là lẽ ra không được bắt đầu |
-| 2 | BE không xanh trước khi chạy | `GET {BE_URL}/health` pre-flight không 200 (controller trả 503 khi Mongo rớt) |
+| 2 | BE không xanh trước khi chạy | `GET {BE_URL}/api/health` pre-flight không 200 (controller trả 503 khi Mongo rớt). Đường dẫn là `/api/health` chứ không phải `/health` — health mount dưới router `/api` |
 | 3 | Hết giờ | bước 9 |
 | 4 | BE restart giữa lúc chạy | `data.uptime` sau < trước. `deploy-staging.yml` có `cancel-in-progress: true` và deploy mọi push vào `staging`, nên chuyện này xảy ra thật |
 | 5 | BE biến mất giữa chừng | đọc được `uptime` trước mà không đọc được sau |

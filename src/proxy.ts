@@ -80,13 +80,21 @@ export function recordStatus(signals: RunSignals, status: number): void {
   else if (status >= 500) signals.count5xx += 1;
 }
 
-/** `data.uptime` từ GET {beUrl}/health. null = không kết luận được. */
+/**
+ * Health của sutagrow-api mount dưới `/api` (routes/index.ts: router.use
+ * ("/health", ...) bên trong api router), nên `{beUrl}/health` trả 404 — đúng
+ * lỗi làm lần chạy thật đầu tiên thành BLOCKED be-unhealthy oan.
+ */
+export const DEFAULT_HEALTH_PATH = "/api/health";
+
+/** `data.uptime` từ GET {beUrl}{healthPath}. null = không kết luận được. */
 export async function readUptime(
   beUrl: string,
   fetchImpl: typeof fetch = fetch,
+  healthPath: string = DEFAULT_HEALTH_PATH,
 ): Promise<number | null> {
   try {
-    const res = await fetchImpl(`${beUrl.replace(/\/$/, "")}/health`);
+    const res = await fetchImpl(`${beUrl.replace(/\/$/, "")}${healthPath}`);
     if (!res.ok) return null;
     const body = (await res.json()) as { data?: { uptime?: unknown } };
     const up = body?.data?.uptime;

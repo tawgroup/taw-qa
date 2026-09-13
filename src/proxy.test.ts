@@ -199,3 +199,24 @@ test("health, reset và socket.io trả tại chỗ, không chạm upstream", as
   await proxy.close();
   await up.close();
 });
+
+test("readUptime gọi /api/health, không phải /health", async () => {
+  // `{beUrl}/health` trả 404 trên sutagrow-api: health mount dưới /api.
+  let called = "";
+  const spy = (async (u: string) => {
+    called = u;
+    return new Response(JSON.stringify({ data: { uptime: 1 } }), { status: 200 });
+  }) as unknown as typeof fetch;
+  await readUptime("https://farm-dev-be.agribeacon.tech", spy);
+  assert.equal(called, "https://farm-dev-be.agribeacon.tech/api/health");
+});
+
+test("readUptime bỏ dấu / thừa ở cuối beUrl", async () => {
+  let called = "";
+  const spy = (async (u: string) => {
+    called = u;
+    return new Response('{"data":{"uptime":1}}', { status: 200 });
+  }) as unknown as typeof fetch;
+  await readUptime("https://x.test/", spy);
+  assert.equal(called, "https://x.test/api/health");
+});
