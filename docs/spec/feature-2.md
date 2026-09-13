@@ -97,6 +97,12 @@ Quyền GitHub App, đúng bốn cái, cài **chỉ** trên `sutagrow-web` (`Onl
 | Issues | Write | Nhận `issue_comment` |
 | Pull requests | **Write** | **Đăng Report.** `Issues: Write` KHÔNG đủ: thử nghiệm cho thấy token đăng được comment lên issue thường (201) nhưng lên PR thì 403 `Resource not accessible by integration`. Docs không ghi chỗ này |
 
+**Đổi quyền của App không tự áp cho installation đang có.** App và installation là hai tầng: sửa ở `Permissions & events` chỉ áp cho lần cài mới, còn installation hiện tại giữ nguyên quyền cũ cho tới khi chủ org bấm chấp nhận. Triệu chứng đánh lừa: `GET /app` trả `pull_requests: write` trong khi `GET /app/installations/{id}` và token vẫn `read`, và mọi lời gọi vẫn 403.
+
+Chỗ duyệt **không** nằm ở trang `Install App` (trang đó chỉ để cài mới) mà ở `github.com/organizations/<org>/settings/installations/<installation_id>`, banner *"is requesting an update to its permissions"* → `Review request`.
+
+Kiểm chứng bằng API, không nhìn màn hình: `GET /app` (App), `GET /app/installations/{id}` (installation), và `permissions` trong response đúc token. Ba cái phải khớp.
+
 Không xin Contents write, không xin Administration, không xin Actions. App không push, không merge, không đổi setting, không thấy repo khác.
 
 Private key của App đọc được code mọi repo đã cài, nên nằm trong AWS Secrets Manager, không nằm trong repo và không nằm trong biến môi trường plaintext của Lambda.
