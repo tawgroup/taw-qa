@@ -111,7 +111,9 @@ Một Runner, một run. Khoá là một **SSM Parameter** `/taw-qa/current-run`
 
 Không dùng `DescribeInstances` làm khoá: hai `/taw-qa` trong cùng một giây đều thấy instance `stopped`, cả hai cùng `StartInstances`, và cả hai đều tưởng mình sở hữu lần chạy. `Overwrite=false` thì người đầu ghi được, người sau nhận `ParameterAlreadyExists` → comment `đang chạy` rồi bỏ.
 
-Runner đọc khoá lúc boot, **xoá lúc teardown**. Runner chết trước khi kịp xoá thì khoá kẹt vĩnh viễn và mọi `/taw-qa` sau đó đều báo bận — nên Lambda coi khoá có `claimedAt` quá **60 phút** là rác và cướp lại. Timeout một lần chạy là 45 phút nên 60 là biên an toàn.
+Runner đọc khoá lúc boot, **xoá lúc teardown**. Việc xoá nằm ở **`ExecStopPost` của systemd unit**, không chỉ trong `finally` của Node: `stop-instances` gửi SIGKILL nên `finally` không bao giờ chạy, và khoá kẹt lại. `ExecStopPost` chạy kể cả khi `ExecStart` bị giết.
+
+Lưới cuối: Lambda coi khoá có `claimedAt` quá **50 phút** là rác và cướp lại. Timeout một lần chạy là 45 phút nên 50 là biên an toàn.
 
 Xong khi: Runner đã được start với `PR_URL`, hoặc đã bỏ qua có lý do.
 
@@ -187,7 +189,11 @@ Xong khi: Proxy trả `/health` 200, và `GET {BE_URL}/health` upstream trả 20
 
 ### 6. Test
 
-Agent tự viết spec vào `tests/e2e/taw-qa-pr-<n>.spec.ts` trong checkout. Dùng `@playwright/test`, dùng fixtures và helpers sẵn có của repo.
+Spec do **opencode Zen** viết (`https://opencode.ai/zen/v1`, OpenAI-compatible, model `kimi-k3` thuộc gói Go). Gọi thẳng bằng `fetch` — không cài CLI `opencode` lên Runner vì CLI cất credential ở `~/.local/share/opencode/auth.json` qua lệnh `/connect` trong TUI, không có đường khai báo headless.
+
+**Không tin model.** Spec phải qua `checkSpec`: có `import @playwright/test`, có `test()`, có `expect()`, không `waitForTimeout`, không URL tuyệt đối ngoài `127.0.0.1`. Quan trọng nhất là `expect()` — spec không có nó thì assertion không bao giờ đỏ được, tức là PASS cả khi PR sai, tệ hơn FAIL oan. Không đạt thì rơi về bộ sinh tất định (`src/online-spec.ts`), không đẩy file rác vào repo người ta.
+
+Spec ghi vào `tests/e2e/taw-qa-pr-<n>.spec.ts` trong checkout.
 
 Agent cần DOM thật để viết spec, nên phải start FE **trước** khi snapshot bằng Playwright MCP. Lệnh start phải là **đúng** `webServer[1]` của repo (`buildPrefix && startCmd`) — chạy lệnh khác thì bundle không trỏ `:3018`, và sau đó `reuseExistingServer` sẽ vui vẻ reuse đúng cái build sai đó.
 
@@ -198,6 +204,10 @@ Chạy: `npx playwright test tests/e2e/taw-qa-pr-<n>.spec.ts --workers=1`, với
 Assertion phải fail nếu Claim sai. Không đủ trang hiện hay 2xx suông.
 
 PASS khi mọi Claim testable đều có assertion và mọi assertion xanh. Một cái fail thì cả lần chạy FAIL.
+
+Playwright phải chạy bằng **`spawn` bất đồng bộ**, tuyệt đối không `execFileSync`. Proxy sống trong cùng tiến trình Runner; `execFileSync` chặn event loop nên Proxy nhận kết nối mà không trả lời nổi, trong khi Playwright đang chờ `:3018/health`. Hai bên chờ nhau tới hết timeout. Triệu chứng đánh lừa: `ss` báo port LISTEN, `curl` trả `000`.
+
+`git` và `npm ci` được phép dùng lệnh đồng bộ vì chúng chạy trước khi Proxy start.
 
 Xong khi: có verdict, kèm file spec.
 
