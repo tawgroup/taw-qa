@@ -49,3 +49,8 @@ data "aws_ami" "ubuntu" {
 data "aws_secretsmanager_secret" "github_app" {
   name = "taw-qa/github-app"
 }
+
+# Config per-project: BE_URL, tài khoản test, org scope, env FE.
+data "aws_secretsmanager_secret" "project" {
+  name = "taw-qa/project/sutagrow-web"
+}

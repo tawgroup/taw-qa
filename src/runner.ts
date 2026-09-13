@@ -89,7 +89,13 @@ export async function releaseAndShutdown(): Promise<void> {
     await new SSMClient({ region }).send(new DeleteParameterCommand({ Name: param }));
     console.log("[runner] đã nhả khoá", param);
   } catch (e) {
-    console.error("[runner] nhả khoá lỗi:", (e as Error).message);
+    const name = (e as { name?: string }).name ?? "";
+    if (name === "ParameterNotFound") {
+      // Boot không do `/taw-qa` (bro bật tay) thì vốn không có khoá nào.
+      console.log("[runner] không có khoá để nhả");
+    } else {
+      console.error("[runner] nhả khoá lỗi:", (e as Error).message);
+    }
   }
 
   if (process.env.TAW_QA_NO_SHUTDOWN === "1") {

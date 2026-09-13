@@ -41,10 +41,16 @@ resource "aws_iam_role_policy" "runner" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid      = "ReadGitHubAppSecret"
-        Effect   = "Allow"
-        Action   = "secretsmanager:GetSecretValue"
-        Resource = data.aws_secretsmanager_secret.github_app.arn
+        # Runner cần CẢ HAI: creds GitHub App và config project. Thiếu cái thứ
+        # hai thì nó đọc được PR nhưng chết ở AccessDeniedException lúc lấy
+        # BE_URL — đúng lỗi của lần chạy đầu tiên.
+        Sid    = "ReadSecrets"
+        Effect = "Allow"
+        Action = "secretsmanager:GetSecretValue"
+        Resource = [
+          data.aws_secretsmanager_secret.github_app.arn,
+          data.aws_secretsmanager_secret.project.arn,
+        ]
       },
       {
         Sid    = "ClaimAndReleaseRunLock"

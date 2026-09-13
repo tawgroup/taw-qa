@@ -11,6 +11,11 @@ apt-get update -y
 curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
 apt-get install -y nodejs git jq
 
+# journald mac dinh luu trong RAM; instance tat la mat log cua run vua hong.
+mkdir -p /var/log/journal
+systemd-tmpfiles --create --prefix /var/log/journal
+systemctl restart systemd-journald
+
 git clone https://github.com/tawgroup/taw-qa.git /opt/taw-qa
 mkdir -p /work
 
