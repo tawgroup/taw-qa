@@ -11,7 +11,14 @@ export function workDir(prNumber: number): string {
 
 function run(cmd: string, args: string[], cwd: string, token: string): string {
   try {
-    return execFileSync(cmd, args, { cwd, encoding: "utf8", stdio: "pipe" });
+    return execFileSync(cmd, args, {
+      cwd,
+      encoding: "utf8",
+      stdio: "pipe",
+      // Repo có .husky; `npm ci` chạy prepare -> husky install và ném trong
+      // checkout shallow. deploy-staging.yml của repo cũng set đúng biến này.
+      env: { ...process.env, HUSKY: "0" },
+    });
   } catch (e) {
     const err = e as { stderr?: Buffer | string; message: string };
     const detail = String(err.stderr ?? err.message);
@@ -54,6 +61,15 @@ export function checkoutPr(opts: {
   // Remote còn giữ token; xoá để token không sống trong .git/config suốt run.
   run("git", ["remote", "set-url", "origin", `https://github.com/${opts.repo}.git`], dir, opts.token);
   return dir;
+}
+
+/**
+ * Checkout sạch không có `node_modules`. `playwright.config.ts` của repo gọi
+ * `npm run build` rồi `npm run start`, và `npx playwright test` cần
+ * `@playwright/test` — cả ba đều chết nếu bỏ bước này. Mất ~2-3 phút.
+ */
+export function installDeps(dir: string, token: string): void {
+  run("npm", ["ci", "--no-audit", "--no-fund"], dir, token);
 }
 
 /**

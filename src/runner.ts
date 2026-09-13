@@ -10,7 +10,7 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { claimsFromPrBody } from "./block.ts";
 import { assembleClaims } from "./claims.ts";
-import { checkoutPr, writeFeEnv } from "./fe-checkout.ts";
+import { checkoutPr, installDeps, writeFeEnv } from "./fe-checkout.ts";
 import { installationToken, postComment, readPr, redact } from "./gh-app.ts";
 import { buildSpec } from "./online-spec.ts";
 import { assertNotProd, type ProjectConfig } from "./project-config.ts";
@@ -189,6 +189,8 @@ export async function main(): Promise<number> {
       headSha: pr.headSha,
     });
     writeFeEnv(dir, cfg);
+    console.log("[runner] npm ci trong checkout (~2-3 phút)");
+    installDeps(dir, token);
 
     proxy = await startProxy({
       beUrl: cfg.beUrl,
