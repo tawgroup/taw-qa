@@ -9,7 +9,17 @@ echo "[provision] $(date -Is)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-apt-get install -y nodejs git jq awscli
+apt-get install -y nodejs git jq unzip
+
+# AWS CLI v2 bang trinh cai chinh thuc. Ubuntu 24.04 (noble) DA BO goi `awscli`
+# khoi apt, nen `apt-get install -y awscli` that bai am tham -- va vi user-data
+# dung `set -uo pipefail` chu khong co `-e`, script chay tiep nhu khong co gi.
+# Hau qua: ExecStopPost khong nha duoc khoa va khong day duoc log, moi /taw-qa
+# sau do bao busy. Mat nhieu luot moi tim ra.
+curl -sS "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install --bin-dir /usr/bin --install-dir /usr/local/aws-cli --update
+aws --version || { echo "[provision] AWS CLI CAI THAT BAI"; exit 1; }
 
 # journald mac dinh luu trong RAM; instance tat la mat log cua run vua hong.
 mkdir -p /var/log/journal

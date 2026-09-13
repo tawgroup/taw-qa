@@ -108,7 +108,9 @@ resource "aws_instance" "runner" {
   }
 
   user_data                   = file("${path.module}/user-data.sh")
-  user_data_replace_on_change = false
+  # Doi user-data thi TAO LAI may: provisioning la mot buoc, sua nua voi tren
+  # may cu de lai trang thai lai cang. Tao lai mat 5 phut, sach va biet chac.
+  user_data_replace_on_change = true
 
   tags = { Name = "${var.name}-runner" }
 
