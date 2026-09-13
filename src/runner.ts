@@ -233,8 +233,13 @@ export async function main(): Promise<number> {
         },
       );
       const green = r.code === 0;
-      if (!green)
+      if (!green) {
         errorText = redact(`${r.stdout}\n${r.stderr}`.slice(-3000), token);
+        // In ra log NGOÀI Report: Report có thể không đăng được (403, mất mạng),
+        // mà đây lại là thông tin chẩn đoán quan trọng nhất của cả lần chạy.
+        // Một đường ra duy nhất cho dữ liệu quan trọng nhất là thiết kế sai.
+        console.error(`[runner] playwright exit=${r.code}\n${errorText}`);
+      }
       verdictInput = claims.testable.map((c) => ({ text: c.text, green }));
     }
 
@@ -263,6 +268,9 @@ export async function main(): Promise<number> {
     commit: pr.headSha.slice(0, 7),
     beUrl: cfg.beUrl,
   });
+  // In Report ra log trước khi đăng: đăng có thể hỏng, log thì luôn lên
+  // CloudWatch qua ExecStopPost.
+  console.log(`[runner] ===== REPORT =====\n${md}\n[runner] ===== HET =====`);
   const url = await postComment(token, lock.repo, lock.prNumber, md);
   console.log(`[runner] Report: ${url}`);
   return v.verdict === "PASS" ? 0 : 1;
