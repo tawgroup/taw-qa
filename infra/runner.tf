@@ -54,6 +54,12 @@ resource "aws_iam_role_policy" "runner" {
         ]
       },
       {
+        Sid    = "ShipRunLogs"
+        Effect = "Allow"
+        Action = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"]
+        Resource = "${aws_cloudwatch_log_group.runner.arn}:*"
+      },
+      {
         Sid    = "ClaimAndReleaseRunLock"
         Effect = "Allow"
         Action = ["ssm:GetParameter", "ssm:DeleteParameter"]
@@ -108,4 +114,9 @@ resource "aws_instance" "runner" {
 
   # instance_state do provider quyết, không khai trong config được. Lambda
   # start và Runner tự stop; tofu không đụng tới trạng thái chạy.
+}
+
+resource "aws_cloudwatch_log_group" "runner" {
+  name              = "/taw-qa/runner"
+  retention_in_days = 14
 }
