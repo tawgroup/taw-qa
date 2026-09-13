@@ -11,6 +11,8 @@
     "build:lambda": "esbuild src/lambda-handler.ts --bundle --platform=node --target=node22 --format=cjs --external:@aws-sdk/* --outfile=infra/dist/handler.js"
   },
   "dependencies": {
+    "@aws-sdk/client-ec2": "^3.700.0",
+    "@aws-sdk/client-ssm": "^3.700.0",
     "playwright": "^1.55.0"
   }
 }

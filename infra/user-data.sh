@@ -15,7 +15,8 @@ git clone https://github.com/tawgroup/taw-qa.git /opt/taw-qa
 mkdir -p /work
 
 # Chromium + thư viện hệ thống. Nặng, nên làm ở đây chứ không mỗi lần boot.
-cd /opt/taw-qa && npx --yes playwright@1.55.0 install --with-deps chromium
+cd /opt/taw-qa && npm ci --omit=dev
+npx --yes playwright@1.55.0 install --with-deps chromium
 
 cat > /etc/systemd/system/taw-qa.service <<'UNIT'
 [Unit]
@@ -30,6 +31,7 @@ Environment=AWS_REGION=ap-southeast-1
 Environment=LOCK_PARAM=/taw-qa/current-run
 # git pull lay code moi nhat moi lan boot; khong fail boot neu mang chap.
 ExecStartPre=-/usr/bin/git -C /opt/taw-qa pull --ff-only
+ExecStartPre=-/usr/bin/npm ci --omit=dev --prefix /opt/taw-qa
 ExecStart=/usr/bin/node --experimental-strip-types /opt/taw-qa/src/runner.ts
 StandardOutput=journal
 StandardError=journal
