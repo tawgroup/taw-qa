@@ -14,15 +14,22 @@ command -v jq  >/dev/null || { echo "ship-logs: khong co jq"; exit 0; }
 TOKEN=$(curl -s -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 60" || true)
 IID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id || echo unknown)
 STREAM="$(date -u +%Y%m%d-%H%M%S)-$IID"
-TS=$(( $(date +%s) * 1000 ))
-
 aws logs create-log-stream --region "$REGION" --log-group-name "$GROUP" --log-stream-name "$STREAM" 2>/dev/null
 
-journalctl -u taw-qa -b 0 --no-pager -o cat 2>/dev/null | tail -400 \
-  | jq -R -s --argjson ts "$TS" '
+# GIO THAT cua tung dong, khong bia.
+#
+# Ban truoc gan TS+i (mili giay tang dan) luc day log, nen moi dong deu mang
+# cung mot gio. Thu tu dung nhung thoi diem sai hoan toan -- khong do duoc buoc
+# nao cham, trong khi timeout mot lan chay la 45 phut.
+#
+# `-o short-unix` cho "<epoch>.<micro> <host> <unit>: <msg>"; lay epoch lam
+# timestamp CloudWatch.
+journalctl -u taw-qa -b 0 --no-pager -o short-unix 2>/dev/null | tail -400 \
+  | jq -R -s '
       split("\n") | map(select(length > 0))
-      | to_entries
-      | map({timestamp: ($ts + .key), message: (.value[0:8000])})
+      | map(capture("^(?<t>[0-9]+)(\\.[0-9]+)? (?<rest>.*)$") // {t: null, rest: .})
+      | map(select(.t != null))
+      | map({timestamp: ((.t | tonumber) * 1000), message: (.rest[0:8000])})
     ' > /tmp/ev.json
 
 if [ -s /tmp/ev.json ] && [ "$(jq length /tmp/ev.json)" -gt 0 ]; then
