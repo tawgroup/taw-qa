@@ -65,6 +65,50 @@ export function firstUnimplemented(): Step | null {
   return STEPS.find((s) => !IMPLEMENTED[s]) ?? null;
 }
 
+/**
+ * Runner LUÔN phải tự dọn, kể cả khi hỏng giữa chừng. Không dọn thì instance
+ * chạy mãi ở $0.2394/giờ và khoá SSM kẹt 60 phút — mọi `/taw-qa` sau đó báo bận.
+ * Vì vậy đây nằm ở `finally`, không nằm ở đường thành công.
+ */
+export async function releaseAndShutdown(): Promise<void> {
+  const region = process.env.AWS_REGION ?? "ap-southeast-1";
+  const param = process.env.LOCK_PARAM ?? "/taw-qa/current-run";
+  try {
+    const { SSMClient, DeleteParameterCommand } = await import("@aws-sdk/client-ssm");
+    await new SSMClient({ region }).send(new DeleteParameterCommand({ Name: param }));
+    console.log("[runner] đã nhả khoá", param);
+  } catch (e) {
+    console.error("[runner] nhả khoá lỗi:", (e as Error).message);
+  }
+
+  if (process.env.TAW_QA_NO_SHUTDOWN === "1") {
+    console.log("[runner] TAW_QA_NO_SHUTDOWN=1 — không tắt máy");
+    return;
+  }
+  try {
+    const id = await fetch(
+      "http://169.254.169.254/latest/meta-data/instance-id",
+      { headers: { "X-aws-ec2-metadata-token": await imdsToken() } },
+    ).then((r) => r.text());
+    const { EC2Client, StopInstancesCommand } = await import("@aws-sdk/client-ec2");
+    await new EC2Client({ region }).send(
+      new StopInstancesCommand({ InstanceIds: [id] }),
+    );
+    console.log("[runner] đã yêu cầu tắt", id);
+  } catch (e) {
+    console.error("[runner] tắt máy lỗi:", (e as Error).message);
+  }
+}
+
+async function imdsToken(): Promise<string> {
+  // IMDSv2 bắt buộc (metadata_options.http_tokens = "required").
+  const r = await fetch("http://169.254.169.254/latest/api/token", {
+    method: "PUT",
+    headers: { "X-aws-ec2-metadata-token-ttl-seconds": "60" },
+  });
+  return r.text();
+}
+
 export async function main(): Promise<number> {
   const blocked = firstUnimplemented();
   console.log(`[runner] ${new Date().toISOString()}`);
@@ -91,5 +135,11 @@ export async function main(): Promise<number> {
 }
 
 if (process.argv[1]?.endsWith("runner.ts")) {
-  main().then((code) => process.exit(code));
+  main()
+    .catch((e) => {
+      console.error("[runner] vỡ:", e);
+      return 1;
+    })
+    .finally(releaseAndShutdown)
+    .then((code) => process.exit(typeof code === "number" ? code : 1));
 }

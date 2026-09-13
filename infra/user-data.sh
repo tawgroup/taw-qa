@@ -27,12 +27,15 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=/opt/taw-qa
 Environment=AWS_REGION=ap-southeast-1
+Environment=LOCK_PARAM=/taw-qa/current-run
 # git pull lay code moi nhat moi lan boot; khong fail boot neu mang chap.
 ExecStartPre=-/usr/bin/git -C /opt/taw-qa pull --ff-only
 ExecStart=/usr/bin/node --experimental-strip-types /opt/taw-qa/src/runner.ts
 StandardOutput=journal
 StandardError=journal
 RemainAfterExit=no
+# Luoi an toan cuoi: runner vo den muc khong chay duoc finally thi systemd tat may.
+ExecStopPost=/usr/bin/bash -c 'systemctl is-failed taw-qa.service >/dev/null && shutdown -h +1 || true' 
 
 [Install]
 WantedBy=multi-user.target
