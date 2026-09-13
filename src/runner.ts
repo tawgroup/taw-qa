@@ -10,7 +10,13 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { claimsFromPrBody } from "./block.ts";
 import { assembleClaims } from "./claims.ts";
-import { checkoutPr, installDeps, writeFeEnv } from "./fe-checkout.ts";
+import {
+  BROWSERS_PATH,
+  checkoutPr,
+  installBrowser,
+  installDeps,
+  writeFeEnv,
+} from "./fe-checkout.ts";
 import { installationToken, postComment, readPr, redact } from "./gh-app.ts";
 import { writeSpec, type OpencodeConfig } from "./opencode.ts";
 import { assertNotProd, type ProjectConfig } from "./project-config.ts";
@@ -197,6 +203,8 @@ export async function main(): Promise<number> {
     writeFeEnv(dir, cfg);
     console.log("[runner] npm ci trong checkout (~2-3 phút)");
     installDeps(dir, token);
+    console.log("[runner] cài Chromium đúng version của repo");
+    installBrowser(dir, token);
 
     proxy = await startProxy({
       beUrl: cfg.beUrl,
@@ -228,7 +236,11 @@ export async function main(): Promise<number> {
         ["playwright", "test", plan.path, "--workers=1", "--reporter=list"],
         {
           cwd: dir,
-          env: { ...process.env, CI: "" },
+          env: {
+            ...process.env,
+            CI: "",
+            PLAYWRIGHT_BROWSERS_PATH: BROWSERS_PATH,
+          },
           timeoutMs: 25 * 60 * 1000,
         },
       );
@@ -251,7 +263,7 @@ export async function main(): Promise<number> {
     await proxy?.close();
   }
 
-  const v = decideVerdict({ signals, claims: verdictInput });
+  const v = decideVerdict({ signals, claims: verdictInput, runnerOutput: errorText });
   console.log(`[runner] verdict ${v.verdict}${v.reason ? ` (${v.reason})` : ""}`);
 
   // Token sống 1h, run tối đa 45 phút — biên mỏng, mà đây là thứ chạy cuối.

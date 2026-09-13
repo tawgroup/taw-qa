@@ -92,3 +92,42 @@ test("timeout → BLOCKED", () => {
 test("stack sạch → không có lý do BLOCKED nào", () => {
   assert.equal(blockedReason(clean), null);
 });
+
+test("test đỏ vì thiếu Chromium là BLOCKED, không phải FAIL", () => {
+  // Lỗi thật gặp trên Runner: provisioning cài Chromium cho playwright 1.55.0
+  // nhưng repo FE dùng version khác và cần bản khác.
+  const out =
+    "Error: browserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/chromium_headless_shell-1223/...";
+  const got = decideVerdict({
+    signals: clean,
+    claims: [{ text: "a", green: false }],
+    runnerOutput: out,
+  });
+  assert.deepEqual(got, { verdict: "BLOCKED", reason: "runner-env" });
+});
+
+test("các dấu hiệu môi trường hỏng khác cũng thành BLOCKED", () => {
+  for (const out of [
+    "npx playwright install",
+    "Error: Cannot find module 'next'",
+    "listen EADDRINUSE: address already in use 127.0.0.1:3000",
+    "Error: Timed out waiting 480000ms from config.webServer",
+  ]) {
+    const got = decideVerdict({
+      signals: clean,
+      claims: [{ text: "a", green: false }],
+      runnerOutput: out,
+    });
+    assert.equal(got.verdict, "BLOCKED", out.slice(0, 30));
+  }
+});
+
+test("test đỏ bình thường vẫn là FAIL", () => {
+  const got = decideVerdict({
+    signals: clean,
+    claims: [{ text: "a", green: false }],
+    runnerOutput:
+      "Error: expect(locator).toBeVisible() failed\n  Locator: getByText('Email')\n  Expected: visible\n  Received: <element not found>",
+  });
+  assert.equal(got.verdict, "FAIL");
+});

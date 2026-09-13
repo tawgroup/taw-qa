@@ -17,7 +17,11 @@ function run(cmd: string, args: string[], cwd: string, token: string): string {
       stdio: "pipe",
       // Repo có .husky; `npm ci` chạy prepare -> husky install và ném trong
       // checkout shallow. deploy-staging.yml của repo cũng set đúng biến này.
-      env: { ...process.env, HUSKY: "0" },
+      env: {
+        ...process.env,
+        HUSKY: "0",
+        PLAYWRIGHT_BROWSERS_PATH: BROWSERS_PATH,
+      },
     });
   } catch (e) {
     const err = e as { stderr?: Buffer | string; message: string };
@@ -70,6 +74,22 @@ export function checkoutPr(opts: {
  */
 export function installDeps(dir: string, token: string): void {
   run("npm", ["ci", "--no-audit", "--no-fund"], dir, token);
+}
+
+/**
+ * Cài Chromium THEO version @playwright/test của repo, sau `npm ci`.
+ *
+ * Provisioning cài sẵn Chromium cho playwright 1.55.0, nhưng repo FE dùng
+ * version khác và đòi bản build khác (`chromium_headless_shell-1223`). Không
+ * biết trước lúc provision được — chỉ biết sau khi đọc lockfile của repo.
+ *
+ * PLAYWRIGHT_BROWSERS_PATH trỏ vào EBS nên lần chạy sau dùng lại, không tải lại
+ * ~150MB mỗi run.
+ */
+export const BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH ?? "/opt/pw-browsers";
+
+export function installBrowser(dir: string, token: string): void {
+  run("npx", ["playwright", "install", "chromium"], dir, token);
 }
 
 /**

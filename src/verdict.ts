@@ -6,7 +6,8 @@ export type BlockedReason =
   | "be-flaky"
   | "rate-limited"
   | "prod-guard"
-  | "timeout";
+  | "timeout"
+  | "runner-env";
 
 /** Số Proxy gom trong suốt lần chạy, dùng để suy BLOCKED. */
 export type RunSignals = {
@@ -30,7 +31,34 @@ export const BLOCKED_TEXT: Record<BlockedReason, string> = {
     "BE staging trả 429. Trần 2000 request / 900s dùng chung theo IP Runner.",
   "prod-guard": "Proxy từ chối start: `BE_URL` trỏ vào host production.",
   timeout: "Hết 45 phút cho một lần chạy.",
+  "runner-env":
+    "Môi trường Runner hỏng (thiếu trình duyệt, build FE vỡ, cổng không mở). Test đỏ vì máy chạy, không phải vì PR sai.",
 };
+
+/**
+ * Test đỏ vì môi trường thì KHÔNG phải FAIL. Lỗi đầu tiên gặp thật: Chromium
+ * chưa cài đúng version của repo, hai Claim đều đỏ, verdict ra FAIL — đổ oan
+ * cho PR. Đúng thứ verdict BLOCKED sinh ra để tránh, mà nó không bắt được.
+ */
+const ENV_FAILURE_RE = new RegExp(
+  [
+    "Executable doesn't exist", // Chromium chưa cài đúng version của repo
+    "browserType\\.launch",
+    "playwright install",
+    "EADDRINUSE", // cổng 3000 hoặc 3018 đã bị chiếm
+    "Cannot find module",
+    "ENOSPC", // hết đĩa
+    // Playwright viết "Timed out waiting 480000ms from config.webServer" —
+    // `webServer` đứng SAU, nên phải bắt cả hai thứ tự.
+    "webServer[\\s\\S]{0,80}(timed out|failed)",
+    "timed out[\\s\\S]{0,80}webServer",
+  ].join("|"),
+  "i",
+);
+
+export function isEnvFailure(playwrightOutput: string | undefined): boolean {
+  return !!playwrightOutput && ENV_FAILURE_RE.test(playwrightOutput);
+}
 
 /**
  * Thứ tự ưu tiên cố định: lý do nào chắc chắn nhất về "không kết luận được"
@@ -58,9 +86,14 @@ export type ClaimOutcome = { text: string; green: boolean };
 export function decideVerdict(opts: {
   signals: RunSignals;
   claims: ClaimOutcome[];
+  /** stdout+stderr của Playwright, để phân biệt test đỏ thật với môi trường hỏng. */
+  runnerOutput?: string;
 }): { verdict: Verdict; reason?: BlockedReason; failReason?: string } {
   const blocked = blockedReason(opts.signals);
   if (blocked) return { verdict: "BLOCKED", reason: blocked };
+
+  if (isEnvFailure(opts.runnerOutput))
+    return { verdict: "BLOCKED", reason: "runner-env" };
 
   if (opts.claims.length === 0)
     return { verdict: "FAIL", failReason: "zero testable claim" };
